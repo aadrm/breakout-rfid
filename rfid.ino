@@ -11,11 +11,11 @@ const int GREENLED = 6;  // Uno -> Pin 7
 const int SERVOPIN = 3;  // Uno -> Pin 6
 Servo door;
 
-//////// ID of the right card //////////////
+// id of the right card
 byte sesam[] = {0x60, 0xA6, 0x36, 0x11};
 
 
-///////State variables////////////
+// state variables
 int state = 0;
 int servo = 0;
 
@@ -35,7 +35,7 @@ void setup()
 
  // Serial.begin(9600); // Serielle Verbindung
 
-  SPI.begin(); // open SPI-connection
+  SPI.begin();
 
   rfidReader.PCD_Init(); // Initial. RFID-reader
  // Serial.println("Doorlock is activated");
@@ -47,54 +47,35 @@ void setup()
 
 }
 
-
-
-//////////////////////////////////////////////////
-//
-// acceptedRFID() and unacceptedRFID()
-// is the new RFID the same as the one in sesam[]?
-//
-//////////////////////////////////////////////////
 bool acceptedRFID(byte uid[4]) {
-  return
-      (rfidReader.uid.uidByte[0] == sesam[0]) &&
-      (rfidReader.uid.uidByte[1] == sesam[1]) &&
-      (rfidReader.uid.uidByte[2] == sesam[2]) &&
-      (rfidReader.uid.uidByte[3] == sesam[3]);
+    return
+        (rfidReader.uid.uidByte[0] == sesam[0]) &&
+        (rfidReader.uid.uidByte[1] == sesam[1]) &&
+        (rfidReader.uid.uidByte[2] == sesam[2]) &&
+        (rfidReader.uid.uidByte[3] == sesam[3]);
 }
 
 bool unacceptedRFID(byte uid[4]) {
-  return
-      (rfidReader.uid.uidByte[0] != sesam[0]) &&
-      (rfidReader.uid.uidByte[1] != sesam[1]) &&
-      (rfidReader.uid.uidByte[2] != sesam[2]) &&
-      (rfidReader.uid.uidByte[3] != sesam[3]) &&
-      (rfidReader.uid.uidByte[0] != 0) &&
-      (rfidReader.uid.uidByte[1] != 0) &&
-      (rfidReader.uid.uidByte[2] != 0) &&
-      (rfidReader.uid.uidByte[3] != 0) ;
+    return
+        (rfidReader.uid.uidByte[0] != sesam[0]) &&
+        (rfidReader.uid.uidByte[1] != sesam[1]) &&
+        (rfidReader.uid.uidByte[2] != sesam[2]) &&
+        (rfidReader.uid.uidByte[3] != sesam[3]) &&
+        (rfidReader.uid.uidByte[0] != 0) &&
+        (rfidReader.uid.uidByte[1] != 0) &&
+        (rfidReader.uid.uidByte[2] != 0) &&
+        (rfidReader.uid.uidByte[3] != 0) ;
 }
 
-//////////////////////////////////////////////////
-//
-// openDoor()
-//   turn servo by 120°
-//
-//////////////////////////////////////////////////
+
 void openDoor() {
     door.write(120);
 }
 
-//////////////////////////////////////////////////
-//
-// closeDoor()
-//   turn servo back by 120°
-//
-//////////////////////////////////////////////////
 void closeDoor() {
    door.write(0);
 }
-//////LED blink functions////////////
+
 void signalDoorLocked() {
   digitalWrite(REDLED, HIGH);
   digitalWrite(GREENLED, LOW);
@@ -144,48 +125,46 @@ void ledblink(int ledPin){
 */
 void loop()
 {
-  ///////Show the State in LEDs///////////
-     if (servo == 0){
-      signalDoorLocked();
-    }
-  if (servo == 1){
-      signalDooropened();
+    if (servo == 0){
+        signalDoorLocked();
     }
 
-  if (rfidReader.PICC_IsNewCardPresent() && rfidReader.PICC_ReadCardSerial()) {           // Read card UID and store it in array
-   //   Serial.print("New card found... ID is =>  ");
-   //   Serial.print("/");
-         for (byte i = 0; i < rfidReader.uid.size; i++) {
-    //        Serial.print(rfidReader.uid.uidByte[i],HEX);
-    //        Serial.print("/");
-         }
+    if (servo == 1){
+        signalDooropened();
+    }
+
+    if (rfidReader.PICC_IsNewCardPresent() && rfidReader.PICC_ReadCardSerial()) { // Read card UID and store it in array
+        Serial.print("New card found... ID is =>  ");
+        for (byte i = 0; i < rfidReader.uid.size; i++) {
+            Serial.println(rfidReader.uid.uidByte[i],HEX);
         }
-  else if (!rfidReader.PICC_IsNewCardPresent() && !rfidReader.PICC_ReadCardSerial())        //Reset State and set UID array to 0,0,0,0
-       {state = 0;
-           for (byte i = 0; i < rfidReader.uid.size; i++) {
+    }
+
+    else if (!rfidReader.PICC_IsNewCardPresent() && !rfidReader.PICC_ReadCardSerial()) { //Reset State and set UID array to 0,0,0,0
+        state = 0;
+        for (byte i = 0; i < rfidReader.uid.size; i++) {
             rfidReader.uid.uidByte[i]=0;
-         }
         }
+    }
 
     if (acceptedRFID(rfidReader.uid.uidByte) && servo == 0 && state == 0) {
-         signalAccessGranted();
-    //     Serial.println("Access granted => open servo");
-         openDoor();
-         servo = 1;
-         state = 1;
-        }
+        signalAccessGranted();
+        Serial.println("Access granted => open servo");
+        openDoor();
+        servo = 1;
+        state = 1;
+    }
+
     if (acceptedRFID(rfidReader.uid.uidByte) && servo == 1 && state == 0) {
-         signalAccessGranted();
-     //    Serial.println("Access granted => close servo");
-         closeDoor();
-         servo = 0;
-         state = 1;
-        }
-    if (unacceptedRFID(rfidReader.uid.uidByte) == true)
-        {
-     //   Serial.println("Access denied");
+        signalAccessGranted();
+        Serial.println("Access granted => close servo");
+        closeDoor();
+        servo = 0;
+        state = 1;
+    }
+
+    if (unacceptedRFID(rfidReader.uid.uidByte) == true) {
+        Serial.println("Access denied");
         signalAccessRefused();
-        }
-
-
- }
+    }
+}
