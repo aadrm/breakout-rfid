@@ -4,167 +4,123 @@
 
 const int SDAPIN   = 10;
 const int RSTPIN   =  9;
-MFRC522 rfidReader(SDAPIN, RSTPIN); // RFID-Reader
 
-const int REDLED   = 5;  // Uno -> Pin 8
-const int GREENLED = 6;  // Uno -> Pin 7
-const int SERVOPIN = 3;  // Uno -> Pin 6
+MFRC522 rfidReader(SDAPIN, RSTPIN);
+
+const int LED_R   = 5;
+const int LED_G = 6;
+const int SERVOPIN = 3;
 Servo door;
 
-// id of the right card
-byte sesam[] = {0x60, 0xA6, 0x36, 0x11};
+enum State {CLOSED, OPEN};
 
+State servo_state;
 
-// state variables
-int state = 0;
-int servo = 0;
-
-/*//////LED blinking///////
-const long interval = 100;           // interval at which to blink (milliseconds)
-unsigned long previousMillis = 0;        // will store last time LED was updated
-int ledState = LOW;             // ledState used to set the LED
-*/
-
-void setup()
-{
-
-  door.attach(SERVOPIN);
-  pinMode(REDLED, OUTPUT);
-  pinMode(GREENLED, OUTPUT);
-  pinMode(SERVOPIN, OUTPUT);
-
- // Serial.begin(9600); // Serielle Verbindung
-
-  SPI.begin();
-
-  rfidReader.PCD_Init(); // Initial. RFID-reader
- // Serial.println("Doorlock is activated");
-
-  door.write(0); // reset Servo
-  signalDoorLocked();
-  servo = 0;
-
-
-}
-
-bool acceptedRFID(byte uid[4]) {
-    return
-        (rfidReader.uid.uidByte[0] == sesam[0]) &&
-        (rfidReader.uid.uidByte[1] == sesam[1]) &&
-        (rfidReader.uid.uidByte[2] == sesam[2]) &&
-        (rfidReader.uid.uidByte[3] == sesam[3]);
-}
-
-bool unacceptedRFID(byte uid[4]) {
-    return
-        (rfidReader.uid.uidByte[0] != sesam[0]) &&
-        (rfidReader.uid.uidByte[1] != sesam[1]) &&
-        (rfidReader.uid.uidByte[2] != sesam[2]) &&
-        (rfidReader.uid.uidByte[3] != sesam[3]) &&
-        (rfidReader.uid.uidByte[0] != 0) &&
-        (rfidReader.uid.uidByte[1] != 0) &&
-        (rfidReader.uid.uidByte[2] != 0) &&
-        (rfidReader.uid.uidByte[3] != 0) ;
-}
-
-
-void openDoor() {
+void open() {
+    Serial.println("Servo to OPEN position.");
     door.write(120);
+    servo_state = OPEN;
 }
 
-void closeDoor() {
-   door.write(0);
+void close() {
+    Serial.println("Servo to CLOSED position.");
+    door.write(0);
+    servo_state = CLOSED;
 }
 
-void signalDoorLocked() {
-  digitalWrite(REDLED, HIGH);
-  digitalWrite(GREENLED, LOW);
+void signalLocked() {
+    digitalWrite(LED_R, HIGH);
+    digitalWrite(LED_G, LOW);
 }
 
-void signalDooropened() {
-  digitalWrite(REDLED, LOW);
-  digitalWrite(GREENLED, HIGH);
+void signalUnlocked() {
+    digitalWrite(LED_R, LOW);
+    digitalWrite(LED_G, HIGH);
 }
 
-void signalAccessGranted() {
- for (int i = 0; i < 5; i++) {
-    digitalWrite(GREENLED, HIGH);
-    delay(100);
-    digitalWrite(GREENLED, LOW);
-    delay(100);
-  }
+void signalReading() {
+    for (int i = 0; i < 20; i++) {
+        digitalWrite(LED_G, HIGH);
+        digitalWrite(LED_R, LOW);
+        delay(20);
+        digitalWrite(LED_R, HIGH);
+        digitalWrite(LED_G, LOW);
+        delay(20);
+    }
+    digitalWrite(LED_R, LOW);
 }
 
-void signalAccessRefused() {
-  for (int i = 0; i < 5; i++) {
-    digitalWrite(REDLED, HIGH);
-    delay(100);
-    digitalWrite(REDLED, LOW);
-    delay(100);
-  }
+void signalGranted() {
+    for (int i = 0; i < 5; i++) {
+        digitalWrite(LED_G, HIGH);
+        delay(100);
+        digitalWrite(LED_G, LOW);
+        delay(100);
+    }
 }
-/*
-void ledblink(int ledPin){
-  unsigned long currentMillis = millis();
 
-  if (currentMillis - previousMillis >= interval) {
-    // save the last time you blinked the LED
-    previousMillis = currentMillis;
-
-    // if the LED is off turn it on and vice-versa:
-    if (ledState == LOW) {
-      ledState = HIGH;
-    } else {
-      ledState = LOW;
+void signalDenied() {
+    for (int i = 0; i < 5; i++) {
+        digitalWrite(LED_R, HIGH);
+        delay(100);
+        digitalWrite(LED_R, LOW);
+        delay(100);
     }
-
-    // set the LED with the ledState of the variable:
-    digitalWrite(ledPin, ledState);
-  }
 }
-*/
-void loop()
-{
-    if (servo == 0){
-        signalDoorLocked();
+
+void sendCorrectSignal() {
+    if ( servo_state == CLOSED ) {
+        signalLocked();
+    }
+    else {
+        signalUnlocked();
+    }
+}
+
+void setup() {
+    door.attach(SERVOPIN);
+    pinMode(LED_R, OUTPUT);
+    pinMode(LED_G, OUTPUT);
+    pinMode(SERVOPIN, OUTPUT);
+
+    Serial.begin(115200);
+
+    SPI.begin();
+
+    rfidReader.PCD_Init(); // Initialize. RFID-reader
+
+    // initial position is closed
+    close();
+    sendCorrectSignal();
+}
+
+void loop() {
+
+    if ( ! rfidReader.PICC_IsNewCardPresent()) {
+        return;
     }
 
-    if (servo == 1){
-        signalDooropened();
+    Serial.println("Reading card");
+    signalReading();
+    if ( ! rfidReader.PICC_ReadCardSerial()) {
+        Serial.println("Card removed");
+        signalDenied();
+        sendCorrectSignal();
+        return;
     }
 
-    if (rfidReader.PICC_IsNewCardPresent() && rfidReader.PICC_ReadCardSerial()) { // Read card UID and store it in array
-        Serial.print("New card found... ID is =>  ");
-        for (byte i = 0; i < rfidReader.uid.size; i++) {
-            Serial.println(rfidReader.uid.uidByte[i],HEX);
-        }
-    }
+    // If the rfid chip is still present after signalReading()
+    // this part of the code is reached
 
-    else if (!rfidReader.PICC_IsNewCardPresent() && !rfidReader.PICC_ReadCardSerial()) { //Reset State and set UID array to 0,0,0,0
-        state = 0;
-        for (byte i = 0; i < rfidReader.uid.size; i++) {
-            rfidReader.uid.uidByte[i]=0;
-        }
+    if ( servo_state == CLOSED) {
+        open();
+        signalGranted();
     }
-
-    if (acceptedRFID(rfidReader.uid.uidByte) && servo == 0 && state == 0) {
-        signalAccessGranted();
-        Serial.println("Access granted => open servo");
-        openDoor();
-        servo = 1;
-        state = 1;
+    else {
+        close();
+        signalDenied();
     }
-
-    if (acceptedRFID(rfidReader.uid.uidByte) && servo == 1 && state == 0) {
-        signalAccessGranted();
-        Serial.println("Access granted => close servo");
-        closeDoor();
-        servo = 0;
-        state = 1;
-    }
-
-    if (unacceptedRFID(rfidReader.uid.uidByte) == true) {
-        Serial.println("Access denied");
-        signalAccessRefused();
-    }
+    sendCorrectSignal();
+    // Leave some time to remove the chip.
+    delay(5000);
 }

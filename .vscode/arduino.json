@@ -1,6 +1,7 @@
 {
-    "configuration": "cpu=atmega328",
+    "configuration": "cpu=atmega328old",
     "board": "arduino:avr:nano",
-    "programmer": "arduino:avrispmkii",
-    "sketch": "rfid.ino"
+    "programmer": "arduino:avrisp",
+    "sketch": "rfid.ino",
+    "port": "COM11"
 }
